@@ -7,23 +7,17 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GrandExchangeOfferChanged;
-import net.runelite.api.events.WidgetLoaded;
-import net.runelite.api.widgets.InterfaceID;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
-import net.runelite.client.game.ItemManager;
-import net.runelite.api.events.WidgetLoaded;
 import net.runelite.client.ui.overlay.OverlayManager;
 
 import java.io.File;
 
-import static net.runelite.api.widgets.InterfaceID.BANK;
-
 @Slf4j
 @PluginDescriptor(
-	name = "Example"
+		name = "Example"
 )
 public class ExamplePlugin extends Plugin
 {
@@ -43,11 +37,13 @@ public class ExamplePlugin extends Plugin
 
 	@Inject ConfigManager cm;
 
+	private DataHandler dataHandler;
+
 	@Override
 	protected void startUp() throws Exception
 	{
-		DataHandler dataHandler = new DataHandler();
-		dataHandler.initializeTrades();
+		dataHandler = injector.getInstance(DataHandler.class);
+		dataHandler.start();
 		log.info("Example started!");
 		om.add(overlay);
 	}
@@ -57,24 +53,22 @@ public class ExamplePlugin extends Plugin
 	{
 		log.info("Example stopped!");
 		om.remove(overlay);
+		dataHandler.shutdown();
 	}
 
 	@Subscribe
-
 	public void onGrandExchangeOfferChanged(GrandExchangeOfferChanged grandExchangeOfferChanged)
-
 	{
-		DataHandler dataHandler = new DataHandler();
-		dataHandler.initializeTrades();
-
-		String filePath = System.getProperty("user.home") + File.separator + "trades_app" + File.separator + "trades.json";
-
-
 		var itemID = grandExchangeOfferChanged.getOffer().getItemId();
 		var quantity = grandExchangeOfferChanged.getOffer().getQuantitySold();
 		var spent = grandExchangeOfferChanged.getOffer().getSpent();
-		var oldQuantity = dataHandler.findTradeByItemId(itemID).getQuantity();
-		var oldSpent = dataHandler.findTradeByItemId(itemID).getTotalPrice();
+		var trade = dataHandler.findTradeByItemId(itemID);
+
+		if(trade == null) return;
+
+		var oldQuantity = trade.getQuantity();
+		var oldSpent = trade.getTotalPrice();
+
 		var addQuantity = quantity + oldQuantity;
 		var addSpent = spent + oldSpent;
 		var subQuantity = quantity - oldQuantity;
@@ -83,14 +77,13 @@ public class ExamplePlugin extends Plugin
 		if (grandExchangeOfferChanged.getOffer().getState() == GrandExchangeOfferState.BUYING && grandExchangeOfferChanged.getOffer().getSpent() > 0)
 		{
 			client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Item:" + grandExchangeOfferChanged.getOffer().getItemId() + " Quantity:" + grandExchangeOfferChanged.getOffer().getTotalQuantity() + " Price:" + grandExchangeOfferChanged.getOffer().getSpent(), null);
-			Trade.updateTradeInJson(filePath, itemID, addQuantity, addSpent);
-			client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Item:" + filePath, null);
+			dataHandler.addTrade(itemID, addQuantity, addSpent);
 		}
 
 		if (grandExchangeOfferChanged.getOffer().getState() == GrandExchangeOfferState.SELLING && grandExchangeOfferChanged.getOffer().getSpent() > 0)
 		{
 			client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Item:" + grandExchangeOfferChanged.getOffer().getItemId() + " Quantity:" + grandExchangeOfferChanged.getOffer().getTotalQuantity() + " Price:" + grandExchangeOfferChanged.getOffer().getSpent(), null);
-			Trade.updateTradeInJson(filePath, itemID, subQuantity, subSpent);
+			dataHandler.addTrade(itemID, subQuantity, subSpent);
 		}
 	}
 
