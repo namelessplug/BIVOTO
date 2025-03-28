@@ -24,7 +24,7 @@ class BankOverlay extends WidgetItemOverlay
         this.dataHandler = dataHandler;
         this.itemManager = itemManager;
         showOnBank();
-
+        revalidate();
 
     }
 
